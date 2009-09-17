@@ -18,7 +18,7 @@ namespace ClarkKent
 {
     public class ClarkKent : Plugin, IPluginBinaryPageDisplay, IPluginPageDisplay, IPluginExtrasMenu
     {
-        public const string DATE_FORMAT = "yyyy-MM-dd HH:mm";
+        public const string DATE_FORMAT = "yyyy-MM-dd HH:mm:ss";
 
         public ClarkKent(CPluginApi api) : base(api)
         {
@@ -79,7 +79,7 @@ namespace ClarkKent
 
         public byte[] BinaryPageDisplay()
         {
-            string csvData = "Start,End,Duration,Project,Case,Title,User" + Environment.NewLine;
+            string csvData = "Start,End,Duration (Min),Project,Case,Title,User" + Environment.NewLine;
             byte[] rawData = null;
 
             try
@@ -109,7 +109,7 @@ namespace ClarkKent
                         string personName = "\"" + (person == null ? "Missing user innfo" : person.sFullName) + "\"";
 
                         TimeSpan timespan = interval.dtEnd.Subtract(interval.dtStart);
-                        string duration = timespan.Hours.ToString("00") + ":" + timespan.Minutes.ToString("00");
+                        string duration = GetMinutes(timespan.TotalSeconds).ToString();
 
                         csvData += intervalStart + "," + intervalEnd + "," + duration + "," +
                             projectName + "," + bugNumber + "," + title + "," + personName + Environment.NewLine;
@@ -143,7 +143,7 @@ namespace ClarkKent
             
             table.Header.AddCell("Start");
             table.Header.AddCell("End");
-            table.Header.AddCell("Duration");
+            table.Header.AddCell("Duration (Min)");
             table.Header.AddCell("Project");
             table.Header.AddCell("Case");
             table.Header.AddCell("Title");
@@ -168,7 +168,7 @@ namespace ClarkKent
                 string personName = HttpUtility.HtmlEncode(person == null ? "Missing user info" : person.sFullName);
 
                 TimeSpan timespan = interval.dtEnd.Subtract(interval.dtStart);
-                string duration = timespan.Hours.ToString("00") + ":" + timespan.Minutes.ToString("00");
+                string duration = GetMinutes(timespan.TotalSeconds).ToString();
 
                 CEditableTableRow row = new CEditableTableRow();
                 row.sRowId = interval.ixInterval.ToString();
@@ -270,7 +270,7 @@ namespace ClarkKent
 
         protected string donate()
         {
-            return "If you find this plugin useful please donate to support further development.<p/>" +
+            return "If you find this plugin useful please donate ($10.00) to support further development.<p/>" +
                     "<form action=\"https://www.paypal.com/cgi-bin/webscr\" method=\"post\">" +
                     "<input type=\"hidden\" name=\"cmd\" value=\"_s-xclick\">" +
                     "<input type=\"hidden\" name=\"hosted_button_id\" value=\"6466097\">" +
@@ -339,6 +339,11 @@ namespace ClarkKent
             CProjectQuery query = api.Project.NewProjectQuery();
             CProject[] projects = query.List();
             return projects;
+        }
+
+        public double GetMinutes(double seconds) {
+            double minutes = seconds / 60;
+            return Math.Round(minutes, 2);
         }
 
         #region EncodingType enum
