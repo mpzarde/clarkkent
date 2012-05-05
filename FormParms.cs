@@ -52,14 +52,14 @@ namespace ClarkKent
 
             if (startValue != null && startValue.Length > 0)
             {
-                _start = DateTime.Parse(startValue);
+                _start = api.TimeZone.DateFromString(startValue);
             }
 
             string endValue = api.Request[api.AddPluginPrefix("end")];
 
             if (endValue != null && endValue.Length > 0)
             {
-                _end = DateTime.Parse(endValue);
+                _end = api.TimeZone.DateFromString(endValue);
             }
 
             if (_start == null) {
@@ -99,6 +99,24 @@ namespace ClarkKent
                 _project = null;
             }
             
+        }
+
+        public void nextMonth()
+        {
+            if (_start != null)
+            {
+                _start = _start.AddMonths(1);
+                _end = _start.AddMonths(1).AddTicks(-1);
+            }
+        }
+
+        public void prevMonth()
+        {
+            if (_start != null)
+            {
+                _start = _start.AddMonths(-1);
+                _end = _start.AddMonths(1).AddTicks(-1);
+            }
         }
     }
 }

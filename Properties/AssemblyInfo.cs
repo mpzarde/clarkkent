@@ -6,7 +6,7 @@ using FogCreek.Plugins;
 
 [assembly: AssemblyFogCreekPluginId("ClarkKent@truecool.com")]
 [assembly: AssemblyFogCreekMajorVersion(3)]
-[assembly: AssemblyFogCreekMinorVersionMin(0)]
+[assembly: AssemblyFogCreekMinorVersionMin(39)]
 [assembly: AssemblyFogCreekEmailAddress("support@truecool.com")]
 [assembly: AssemblyFogCreekWebsite("http://www.truecool.com")]
 
@@ -19,7 +19,7 @@ using FogCreek.Plugins;
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("TrueCool.com Inc.")]
 [assembly: AssemblyProduct("ClarkKent")]
-[assembly: AssemblyCopyright("Copyright © TrueCool.com Inc. 2009")]
+[assembly: AssemblyCopyright("Copyright © TrueCool.com Inc. 2011")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
@@ -41,5 +41,5 @@ using FogCreek.Plugins;
 // You can specify all the values or you can default the Build and Revision Numbers 
 // by using the '*' as shown below:
 // [assembly: AssemblyVersion("1.0.*")]
-[assembly: AssemblyVersion("1.0.7")]
-[assembly: AssemblyFileVersion("1.0.7")]
+[assembly: AssemblyVersion("1.0.9")]
+[assembly: AssemblyFileVersion("1.0.9")]

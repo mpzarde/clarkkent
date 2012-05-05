@@ -18,8 +18,6 @@ namespace ClarkKent
 {
     public class ClarkKent : Plugin, IPluginBinaryPageDisplay, IPluginPageDisplay, IPluginExtrasMenu
     {
-        public const string DATE_FORMAT = "yyyy-MM-dd HH:mm:ss";
-
         public ClarkKent(CPluginApi api) : base(api)
         {
         }
@@ -44,14 +42,30 @@ namespace ClarkKent
 
         public string PageDisplay()
         {
+            String action = api.Request[api.AddPluginPrefix("sAction")] == null ? 
+                null : api.Request[api.AddPluginPrefix("sAction")].ToString();
+
             FormParms parms = new FormParms();
 
-            if (api.Request[api.AddPluginPrefix("sAction")] != null &&
-                api.Request[api.AddPluginPrefix("sAction")].ToString() == "fetch" &&
+            if (action != null &&
                 api.Request[api.AddPluginPrefix("actionToken")] != null &&
                 api.Security.ValidateActionToken(api.Request[api.AddPluginPrefix("actionToken")], "fetch"))
             {
-                parms.loadFormParms(api);
+
+                if (action == "fetch")
+                {
+                    parms.loadFormParms(api);
+                }
+                else if (action == "next")
+                {
+                    parms.loadFormParms(api);
+                    parms.nextMonth();
+                }
+                else if (action == "prev")
+                {
+                    parms.loadFormParms(api);
+                    parms.prevMonth();
+                }
             }
 
             string html = InputForm(parms);
@@ -69,7 +83,7 @@ namespace ClarkKent
                 html += "No time intervals found.";
             }
 
-            html += "<p/>" + footer() + "<p/>" + donate();
+            html += "<p/>" + footer() + "<p/>";
 
             return html;
         }
@@ -95,8 +109,8 @@ namespace ClarkKent
 
                     foreach (CTimeInterval interval in intervals)
                     {
-                        string intervalStart = api.TimeZone.CTZFromUTC(interval.dtStart).ToString(DATE_FORMAT);
-                        string intervalEnd = api.TimeZone.CTZFromUTC(interval.dtEnd).ToString(DATE_FORMAT);
+                        string intervalStart = api.TimeZone.DateTimeString(api.TimeZone.CTZFromUTC(interval.dtStart), false);
+                        string intervalEnd = api.TimeZone.DateTimeString(api.TimeZone.CTZFromUTC(interval.dtEnd), false);
 
                         CBug bug = api.Bug.GetBug(interval.ixBug);
                         string bugNumber = (bug == null ? "????" : bug.ixBug.ToString());
@@ -139,10 +153,13 @@ namespace ClarkKent
 
         protected string HtmlTableData(CTimeInterval[] intervals)
         {
+            double totalMinutes = 0;
+
             CEditableTable table = new CEditableTable("intervals");
             
             table.Header.AddCell("Start");
             table.Header.AddCell("End");
+            table.Header.AddCell("Duration (Hrs)");
             table.Header.AddCell("Duration (Min)");
             table.Header.AddCell("Project");
             table.Header.AddCell("Case");
@@ -153,8 +170,8 @@ namespace ClarkKent
 
             foreach (CTimeInterval interval in intervals)
             {
-                string intervalStart = api.TimeZone.CTZFromUTC(interval.dtStart).ToString(DATE_FORMAT);
-                string intervalEnd = api.TimeZone.CTZFromUTC(interval.dtEnd).ToString(DATE_FORMAT);
+                string intervalStart = api.TimeZone.DateTimeString(api.TimeZone.CTZFromUTC(interval.dtStart), false);
+                string intervalEnd = api.TimeZone.DateTimeString(api.TimeZone.CTZFromUTC(interval.dtEnd), false);
 
                 CBug bug = api.Bug.GetBug(interval.ixBug);
 
@@ -168,20 +185,31 @@ namespace ClarkKent
                 string personName = HttpUtility.HtmlEncode(person == null ? "Missing user info" : person.sFullName);
 
                 TimeSpan timespan = interval.dtEnd.Subtract(interval.dtStart);
-                string duration = GetMinutes(timespan.TotalSeconds).ToString();
+                double intervalMinutes = GetMinutes(timespan.TotalSeconds);
+                totalMinutes += intervalMinutes;
 
                 CEditableTableRow row = new CEditableTableRow();
                 row.sRowId = interval.ixInterval.ToString();
                 row.AddCell(intervalStart);
                 row.AddCell(intervalEnd);
-                row.AddCell(duration);
+                row.AddCell(GetFormatedHoursAndMinutes(intervalMinutes));
+                row.AddCell(intervalMinutes.ToString());
                 row.AddCell(projectName);
-                row.AddCell(bugNumber);
+                row.AddCell(BugDisplay.Link(bug, bugNumber));
                 row.AddCell(title);
                 row.AddCell(personName);
 
                 table.Body.AddRow(row);
             }
+
+            table.Footer.AddCell("");
+            table.Footer.AddCell("Total");
+            table.Footer.AddCell(GetFormatedHoursAndMinutes(totalMinutes));
+            table.Footer.AddCell(totalMinutes.ToString());
+            table.Footer.AddCell("");
+            table.Footer.AddCell("");
+            table.Footer.AddCell("");
+            table.Footer.AddCell("");
 
             return table.RenderHtml();
         }
@@ -248,12 +276,14 @@ namespace ClarkKent
             <tr>
                 <td nowrap>Start</td><td>{3}</td>
                 <td nowrap>End</td><td>{4}</td>
-                <td>&nbsp;</td>
+                <td nowrap><input type=""submit"" value=""Prev Month"" onclick=""{1}sAction.value='prev';return true;""/></td>
+                <td nowrap><input type=""submit"" value=""Next Month"" onclick=""{1}sAction.value='next';return true;""/></td>
             </tr>
             <tr>
                 <td nowrap>User</td><td>{5}</td>
                 <td nowrap>Project</td><td>{6}</td>
-                <td><input type=""submit"" value=""Fetch""</td>
+                <td nowrap><input type=""submit"" value=""Fetch"" onclick=""{1}sAction.value='fetch';return true;""/></td>
+                <td>&nbsp;</td>
             </tr>
             </table>
             </form>", 
@@ -304,6 +334,9 @@ namespace ClarkKent
         protected CTimeInterval[] getIntervals(FormParms parms)
         {
             CTimeIntervalQuery query = api.TimeInterval.NewTimeIntervalQuery();
+
+            query.IgnorePermissions = true;
+
             query.AddWhere("dtStart >= @start");
             query.SetParamDate("start", api.TimeZone.UTCFromCTZ(parms.getStart()));
             query.AddWhere("dtEnd <= @end");
@@ -330,6 +363,7 @@ namespace ClarkKent
         protected CPerson[] getPersons()
         {
             CPersonQuery query = api.Person.NewPersonQuery();
+            query.IgnorePermissions = true;
             CPerson[] persons = query.List();
             return persons;
         }
@@ -337,6 +371,7 @@ namespace ClarkKent
         protected CProject[] getProjects()
         {
             CProjectQuery query = api.Project.NewProjectQuery();
+            query.IgnorePermissions = true;
             CProject[] projects = query.List();
             return projects;
         }
@@ -344,6 +379,12 @@ namespace ClarkKent
         public double GetMinutes(double seconds) {
             double minutes = seconds / 60;
             return Math.Round(minutes, 2);
+        }
+
+        public String GetFormatedHoursAndMinutes(double minutes)
+        {
+            TimeSpan span = TimeSpan.FromMinutes(minutes);
+            return string.Format("{0:0}:{1:D2}", (span.Days * 24) + span.Hours, span.Minutes);
         }
 
         #region EncodingType enum
