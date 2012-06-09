@@ -109,17 +109,22 @@ namespace ClarkKent
 
                     foreach (CTimeInterval interval in intervals)
                     {
+                        interval.IgnorePermissions = true;
+
                         string intervalStart = api.TimeZone.DateTimeString(api.TimeZone.CTZFromUTC(interval.dtStart), false);
                         string intervalEnd = api.TimeZone.DateTimeString(api.TimeZone.CTZFromUTC(interval.dtEnd), false);
 
                         CBug bug = api.Bug.GetBug(interval.ixBug);
+                        if (bug != null) bug.IgnorePermissions = true;
                         string bugNumber = (bug == null ? "????" : bug.ixBug.ToString());
                         string title = "\"" + (bug == null ? "Missing bug info" : bug.sTitle) + "\"";
 
-                        CProject project = api.Project.GetProject(bug.ixProject);
+                        CProject project = (bug == null) ? null : api.Project.GetProject(bug.ixProject);
+                        if (project != null) project.IgnorePermissions = true;
                         string projectName = "\"" + (project == null ? "Missing project info" : project.sProject) + "\"";
 
                         CPerson person = api.Person.GetPerson(interval.ixPerson);
+                        if (person != null) person.IgnorePermissions = true;
                         string personName = "\"" + (person == null ? "Missing user innfo" : person.sFullName) + "\"";
 
                         TimeSpan timespan = interval.dtEnd.Subtract(interval.dtStart);
@@ -127,6 +132,7 @@ namespace ClarkKent
 
                         csvData += intervalStart + "," + intervalEnd + "," + duration + "," +
                             projectName + "," + bugNumber + "," + title + "," + personName + Environment.NewLine;
+
                     }
 
                     rawData = StringToByteArray(csvData, EncodingType.ASCII);
@@ -170,18 +176,25 @@ namespace ClarkKent
 
             foreach (CTimeInterval interval in intervals)
             {
+                interval.IgnorePermissions = true;
+
                 string intervalStart = api.TimeZone.DateTimeString(api.TimeZone.CTZFromUTC(interval.dtStart), false);
                 string intervalEnd = api.TimeZone.DateTimeString(api.TimeZone.CTZFromUTC(interval.dtEnd), false);
 
                 CBug bug = api.Bug.GetBug(interval.ixBug);
+                if (bug != null) bug.IgnorePermissions = true;
 
                 string bugNumber = (bug == null ? "????" : bug.ixBug.ToString());
                 string title = HttpUtility.HtmlEncode(bug == null ? "Missing bug info" : bug.sTitle);
 
-                CProject project = api.Project.GetProject(bug.ixProject);
+                CProject project = (bug == null) ? null : api.Project.GetProject(bug.ixProject);
+                if (project != null) project.IgnorePermissions = true;
+
                 string projectName = HttpUtility.HtmlEncode(project == null ? "Missing project info" : project.sProject);
 
                 CPerson person = api.Person.GetPerson(interval.ixPerson);
+                if (person != null) person.IgnorePermissions = true;
+
                 string personName = HttpUtility.HtmlEncode(person == null ? "Missing user info" : person.sFullName);
 
                 TimeSpan timespan = interval.dtEnd.Subtract(interval.dtStart);
@@ -243,12 +256,24 @@ namespace ClarkKent
             string personsHtml = Forms.SelectInput(api.AddPluginPrefix("person"), personOptions, indexValue, personValues);
 
             CProject[] projects = getProjects();
-            string[] projectOptions = new string[projects.Length + 1];
-            string[] projectValues = new string[projects.Length + 1];
 
-            projectOptions[0] = "All";
-            projectValues[0] = "0";
-            index = 1;
+            string[] projectOptions = null;
+            string[] projectValues = null;
+
+            if (api.Person.GetCurrentPerson().GetPermissionLevel() > PermissionLevel.Normal)
+            {
+                projectValues = new string[projects.Length + 1];
+                projectOptions = new string[projects.Length + 1];
+                projectOptions[0] = "All";
+                projectValues[0] = "0";
+                index = 1;
+            }
+            else
+            {
+                projectValues = new string[projects.Length];
+                projectOptions = new string[projects.Length];
+                index = 0;
+            }
 
             foreach (CProject project in projects)
             {
@@ -334,8 +359,10 @@ namespace ClarkKent
         protected CTimeInterval[] getIntervals(FormParms parms)
         {
             CTimeIntervalQuery query = api.TimeInterval.NewTimeIntervalQuery();
-
             query.IgnorePermissions = true;
+            query.ExcludeDeleted = true;
+            query.ExcludeUnreadable = false;
+            query.ExcludeUnwritable = false;
 
             query.AddWhere("dtStart >= @start");
             query.SetParamDate("start", api.TimeZone.UTCFromCTZ(parms.getStart()));
@@ -344,7 +371,7 @@ namespace ClarkKent
 
             if (parms.getPerson() != null && parms.getPerson().ixPerson != 0)
             {
-                query.AddWhere("ixPerson = @person");
+                query.AddWhere("TimeInterval.ixPerson = @person");
                 query.SetParamInt("person", parms.getPerson().ixPerson);
             }
 
