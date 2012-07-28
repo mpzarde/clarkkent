@@ -41,6 +41,11 @@ namespace ClarkKent
             return _project;
         }
 
+        public void setProject(CProject project)
+        {
+            _project = project;
+        }
+
         public CPerson getPerson()
         {
             return _person;

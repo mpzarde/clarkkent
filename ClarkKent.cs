@@ -112,23 +112,31 @@ namespace ClarkKent
                         interval.IgnorePermissions = true;
 
                         string intervalStart = api.TimeZone.DateTimeString(api.TimeZone.CTZFromUTC(interval.dtStart), false);
+                        intervalStart = System.Security.SecurityElement.Escape(intervalStart);
+
                         string intervalEnd = api.TimeZone.DateTimeString(api.TimeZone.CTZFromUTC(interval.dtEnd), false);
+                        intervalEnd = System.Security.SecurityElement.Escape(intervalEnd);
 
                         CBug bug = api.Bug.GetBug(interval.ixBug);
                         if (bug != null) bug.IgnorePermissions = true;
                         string bugNumber = (bug == null ? "????" : bug.ixBug.ToString());
-                        string title = "\"" + (bug == null ? "Missing bug info" : bug.sTitle) + "\"";
+                        bugNumber = System.Security.SecurityElement.Escape(bugNumber);
+
+                        string title = (bug == null ? "Missing bug info" : bug.sTitle);
+                        title = "\"" + System.Security.SecurityElement.Escape(title) + "\"";
 
                         CProject project = (bug == null) ? null : api.Project.GetProject(bug.ixProject);
                         if (project != null) project.IgnorePermissions = true;
-                        string projectName = "\"" + (project == null ? "Missing project info" : project.sProject) + "\"";
+                        string projectName = (project == null ? "Missing project info" : project.sProject);
+                        projectName = "\"" +  System.Security.SecurityElement.Escape(projectName) + "\"";
 
                         CPerson person = api.Person.GetPerson(interval.ixPerson);
                         if (person != null) person.IgnorePermissions = true;
-                        string personName = "\"" + (person == null ? "Missing user innfo" : person.sFullName) + "\"";
+                        string personName = (person == null ? "Missing user innfo" : person.sFullName);
+                        personName = "\"" + System.Security.SecurityElement.Escape(personName) + "\"";
 
                         TimeSpan timespan = interval.dtEnd.Subtract(interval.dtStart);
-                        string duration = GetMinutes(timespan.TotalSeconds).ToString();
+                        string duration = System.Security.SecurityElement.Escape(GetMinutes(timespan.TotalSeconds).ToString());
 
                         csvData += intervalStart + "," + intervalEnd + "," + duration + "," +
                             projectName + "," + bugNumber + "," + title + "," + personName + Environment.NewLine;
@@ -359,10 +367,27 @@ namespace ClarkKent
         protected CTimeInterval[] getIntervals(FormParms parms)
         {
             CTimeIntervalQuery query = api.TimeInterval.NewTimeIntervalQuery();
-            query.IgnorePermissions = true;
-            query.ExcludeDeleted = true;
-            query.ExcludeUnreadable = false;
-            query.ExcludeUnwritable = false;
+
+            if (api.Person.GetCurrentPerson().GetPermissionLevel() < PermissionLevel.Administrator)
+            {
+                query.IgnorePermissions = true;
+                query.ExcludeUnreadable = false;
+
+                if (parms.getProject() == null || parms.getProject().ixProject == 0)
+                {
+                    CProject[] projects = getProjects();
+
+                    if (projects != null && projects.Length > 0)
+                    {
+                        parms.setProject(projects[0]);
+                    }
+                }
+
+                if (parms.getProject() == null || parms.getProject().ixProject == 0)
+                {
+                    return null;
+                }
+            }
 
             query.AddWhere("dtStart >= @start");
             query.SetParamDate("start", api.TimeZone.UTCFromCTZ(parms.getStart()));
@@ -398,8 +423,8 @@ namespace ClarkKent
         protected CProject[] getProjects()
         {
             CProjectQuery query = api.Project.NewProjectQuery();
-            query.IgnorePermissions = true;
             CProject[] projects = query.List();
+            query.AddOrderBy("CProject.sProject");
             return projects;
         }
 
