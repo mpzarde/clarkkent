@@ -129,10 +129,9 @@ namespace ClarkKent
                         if (project != null) project.IgnorePermissions = true;
                         string projectName = (project == null ? "Missing project info" : project.sProject);
                         projectName = "\"" +  System.Security.SecurityElement.Escape(projectName) + "\"";
-
+                        
                         CPerson person = api.Person.GetPerson(interval.ixPerson);
-                        if (person != null) person.IgnorePermissions = true;
-                        string personName = (person == null ? "Missing user innfo" : person.sFullName);
+                        String personName = getPersonName(person);
                         personName = "\"" + System.Security.SecurityElement.Escape(personName) + "\"";
 
                         TimeSpan timespan = interval.dtEnd.Subtract(interval.dtStart);
@@ -201,9 +200,7 @@ namespace ClarkKent
                 string projectName = HttpUtility.HtmlEncode(project == null ? "Missing project info" : project.sProject);
 
                 CPerson person = api.Person.GetPerson(interval.ixPerson);
-                if (person != null) person.IgnorePermissions = true;
-
-                string personName = HttpUtility.HtmlEncode(person == null ? "Missing user info" : person.sFullName);
+                String personName = HttpUtility.HtmlEncode(getPersonName(person));
 
                 TimeSpan timespan = interval.dtEnd.Subtract(interval.dtStart);
                 double intervalMinutes = GetMinutes(timespan.TotalSeconds);
@@ -249,7 +246,7 @@ namespace ClarkKent
             int index = 1;
 
             foreach(CPerson person in persons) {
-                personOptions[index] = person.sFullName.Trim();
+                personOptions[index] = getPersonName(person).Trim();
                 personValues[index] = person.ixPerson.ToString();
                 index++;
             }
@@ -268,20 +265,11 @@ namespace ClarkKent
             string[] projectOptions = null;
             string[] projectValues = null;
 
-            if (api.Person.GetCurrentPerson().GetPermissionLevel() > PermissionLevel.Normal)
-            {
-                projectValues = new string[projects.Length + 1];
-                projectOptions = new string[projects.Length + 1];
-                projectOptions[0] = "All";
-                projectValues[0] = "0";
-                index = 1;
-            }
-            else
-            {
-                projectValues = new string[projects.Length];
-                projectOptions = new string[projects.Length];
-                index = 0;
-            }
+            projectValues = new string[projects.Length + 1];
+            projectOptions = new string[projects.Length + 1];
+            projectOptions[0] = "All";
+            projectValues[0] = "0";
+            index = 1;
 
             foreach (CProject project in projects)
             {
@@ -368,27 +356,6 @@ namespace ClarkKent
         {
             CTimeIntervalQuery query = api.TimeInterval.NewTimeIntervalQuery();
 
-            if (api.Person.GetCurrentPerson().GetPermissionLevel() < PermissionLevel.Administrator)
-            {
-                query.IgnorePermissions = true;
-                query.ExcludeUnreadable = false;
-
-                if (parms.getProject() == null || parms.getProject().ixProject == 0)
-                {
-                    CProject[] projects = getProjects();
-
-                    if (projects != null && projects.Length > 0)
-                    {
-                        parms.setProject(projects[0]);
-                    }
-                }
-
-                if (parms.getProject() == null || parms.getProject().ixProject == 0)
-                {
-                    return null;
-                }
-            }
-
             query.AddWhere("dtStart >= @start");
             query.SetParamDate("start", api.TimeZone.UTCFromCTZ(parms.getStart()));
             query.AddWhere("dtEnd <= @end");
@@ -400,10 +367,46 @@ namespace ClarkKent
                 query.SetParamInt("person", parms.getPerson().ixPerson);
             }
 
-            if (parms.getProject() != null && parms.getProject().ixProject != 0) {
+            if (parms.getProject() != null && parms.getProject().ixProject != 0)
+            {
                 query.AddLeftJoin("Bug", "TimeInterval.ixBug = Bug.ixBug");
                 query.AddWhere("Bug.ixProject = @project");
                 query.SetParamInt("project", parms.getProject().ixProject);
+            }
+            else if (api.Person.GetCurrentPerson().GetPermissionLevel() < PermissionLevel.Administrator)
+            {
+                // "All" project was selected, need to specify IN clause
+                // getProjects will only return projects that user has access to
+                // We build the IN clause with those projects otherwise we either get too many or not
+                // enough depending on how we set the IgnorePermissions and ExcludeUnreadable values
+
+                CProject[] projects = getProjects();
+
+                if (projects != null && projects.Length > 0)
+                {
+                    query.IgnorePermissions = true;
+                    query.ExcludeUnreadable = false;
+
+                    string inClause = "(";
+
+                    foreach (CProject project in projects)
+                    {
+                        string projectKey = project.ixProject.ToString();
+                        inClause = inClause + projectKey;
+                        inClause = inClause + ",";
+                    }
+
+                    inClause = inClause.Substring(0, inClause.Length - 1);
+                    inClause += ")";
+
+                    query.AddLeftJoin("Bug", "TimeInterval.ixBug = Bug.ixBug");
+                    query.AddWhere("Bug.ixProject IN " + inClause);
+                }
+                else
+                {
+                    query.AddLeftJoin("Bug", "TimeInterval.ixBug = Bug.ixBug");
+                    query.AddWhere("Bug.ixProject = -1");
+                }
             }
 
             query.AddOrderBy("TimeInterval.dtStart");
@@ -428,15 +431,33 @@ namespace ClarkKent
             return projects;
         }
 
-        public double GetMinutes(double seconds) {
+        protected double GetMinutes(double seconds) {
             double minutes = seconds / 60;
             return Math.Round(minutes, 2);
         }
 
-        public String GetFormatedHoursAndMinutes(double minutes)
+        protected String GetFormatedHoursAndMinutes(double minutes)
         {
             TimeSpan span = TimeSpan.FromMinutes(minutes);
             return string.Format("{0:0}:{1:D2}", (span.Days * 24) + span.Hours, span.Minutes);
+        }
+
+        protected String getPersonName(CPerson person)
+        {
+            string personName = "Missing user info";
+            if (person != null)
+            {
+                if (person.IsReadable)
+                {
+                    personName = person.sFullName;
+                }
+                else
+                {
+                    personName = "User " + person.ixPerson.ToString();
+                }
+            }
+
+            return personName;
         }
 
         #region EncodingType enum
